@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>계산기</title>
+<style>
+  :root{
+    --bg:#000000;
+    --text:#ffffff;
+    --sub:#8b8b8b;
+    --num-bg:#2a2a2a;
+    --num-bg-active:#3c3c3c;
+    --op-bg:#adadad;
+    --op-bg-active:#c7c7c7;
+    --op-fg:#000000;
+    --eq-bg:#22c55e;
+    --eq-bg-active:#3ddc70;
+    --green:#22c55e;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{
+    height:100%;
+    margin:0;
+    background:var(--bg);
+    font-family:"Roboto","Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    overflow:hidden;
+  }
+  .app{
+    max-width:420px;
+    margin:0 auto;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  .display-area{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-end;
+    justify-content:flex-end;
+    padding:0 28px 20px;
+    min-height:140px;
+  }
+  .expression{
+    color:var(--sub);
+    font-size:20px;
+    font-weight:400;
+    text-align:right;
+    min-height:26px;
+    word-break:break-all;
+    margin-bottom:6px;
+  }
+  .result{
+    color:var(--text);
+    font-size:60px;
+    font-weight:300;
+    line-height:1;
+    text-align:right;
+    word-break:break-all;
+    display:flex;
+    align-items:baseline;
+  }
+  .result.small{ font-size:38px; }
+  .result.tiny{ font-size:30px; }
+  .cursor{
+    display:inline-block;
+    width:2px;
+    height:0.9em;
+    background:var(--green);
+    margin-left:4px;
+    animation:blink 1s step-end infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  .toolbar{
+    display:flex;
+    align-items:center;
+    padding:14px 20px;
+    gap:28px;
+  }
+  .toolbar .icon{
+    width:24px;
+    height:24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#c9c9c9;
+  }
+  .toolbar .icon svg{ width:22px; height:22px; }
+  .toolbar .spacer{ flex:1; }
+  .toolbar .icon.backspace{ color:var(--green); }
+
+  .divider{
+    height:1px;
+    background:#2a2a2a;
+    margin:0 0 6px;
+  }
+
+  .keys{
+    display:grid;
+    grid-template-columns:repeat(4, 1fr);
+    gap:0;
+    padding:8px 6px 20px;
+  }
+  /* 버튼 자체는 셀 전체를 꽉 채우는 사각형 히트박스.
+     눈에 보이는 원은 ::before 로 안쪽에 그려서, 원과 원 사이 빈 공간을
+     눌러도(화면을 뒤집어서 정확히 조준하기 어려워도) 버튼이 눌리게 한다. */
+  button{
+    position:relative;
+    border:none;
+    outline:none;
+    background:transparent;
+    color:var(--text);
+    font-size:30px;
+    font-weight:400;
+    aspect-ratio:1/1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  button::before{
+    content:"";
+    position:absolute;
+    inset:5px;
+    border-radius:50%;
+    background:var(--num-bg);
+    transition:background 0.08s ease;
+    z-index:0;
+  }
+  button:active::before{ background:var(--num-bg-active); }
+  button > span{ position:relative; z-index:1; pointer-events:none; }
+
+  .fn{ font-size:26px; }
+  .op{ color:var(--op-fg); font-size:32px; font-weight:400; }
+  .op::before{ background:var(--op-bg); }
+  .op:active::before{ background:var(--op-bg-active); }
+  .op.selected::before{ background:#fff; }
+  .equals{ color:#000; font-size:32px; font-weight:600; }
+  .equals::before{ background:var(--eq-bg); }
+  .equals:active::before{ background:var(--eq-bg-active); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="display-area">
+      <div class="expression" id="expression">&nbsp;</div>
+      <div class="result" id="result"><span id="resultText">0</span><span class="cursor"></span></div>
+    </div>
+
+    <div class="toolbar">
+      <span class="icon" id="armIcon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </span>
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 9v3M11 9v3M15 9v3"/></svg>
+      </span>
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h.01M12 9h.01M17 9h.01M7 14h.01M12 14h.01"/></svg>
+      </span>
+      <span class="spacer"></span>
+      <span class="icon backspace" id="backspace">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H8l-6-6z"/><path d="M13 10l4 4M17 10l-4 4"/></svg>
+      </span>
+    </div>
+    <div class="divider"></div>
+
+    <div class="keys">
+      <button class="fn" id="clear"><span>C</span></button>
+      <button class="fn" data-fn="paren"><span>( )</span></button>
+      <button class="fn" data-fn="percent"><span>%</span></button>
+      <button class="op" data-op="÷"><span>÷</span></button>
+
+      <button data-num="7"><span>7</span></button>
+      <button data-num="8"><span>8</span></button>
+      <button data-num="9"><span>9</span></button>
+      <button class="op" data-op="×"><span>×</span></button>
+
+      <button data-num="4"><span>4</span></button>
+      <button data-num="5"><span>5</span></button>
+      <button data-num="6"><span>6</span></button>
+      <button class="op" data-op="-"><span>−</span></button>
+
+      <button data-num="1"><span>1</span></button>
+      <button data-num="2"><span>2</span></button>
+      <button data-num="3"><span>3</span></button>
+      <button class="op" data-op="+"><span>+</span></button>
+
+      <button class="fn" data-fn="sign"><span>+/−</span></button>
+      <button data-num="0"><span>0</span></button>
+      <button data-num="."><span>.</span></button>
+      <button class="equals" data-op="="><span>=</span></button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const resultText = document.getElementById('resultText');
+  const resultEl = document.getElementById('result');
+  const exprEl = document.getElementById('expression');
+  const keys = document.querySelector('.keys');
+  const clearBtn = document.getElementById('clear');
+  const backspaceBtn = document.getElementById('backspace');
+  const armIcon = document.getElementById('armIcon');
+
+  let current = '0';
+  let previous = null;
+  let operator = null;
+  let justEvaluated = false;
+
+  // armed = true: '-' 를 누른 뒤(또는 이미 누른 상태에서) 시계 아이콘을 탭하면
+  // 관객이 누르기도 전에 이미 필요한 작은 수(B)가 화면에 표시된다(locked).
+  // 그 뒤로는 숫자를 아무리 눌러도 화면이 바뀌지 않고, '=' 을 누르면
+  // A - B = target 이 실제 뺄셈으로 확정된다. '=' 을 안 눌러도 이미
+  // 화면에는 원하는 B가 떠 있으므로 바로 뒤집어서 보여줘도 된다.
+  let armed = false;
+  let locked = false;
+  let forcedTarget = null;
+  let forcedB = null;
+
+  function vibrate(ms){
+    try { if (navigator.vibrate) navigator.vibrate(ms); } catch(e){}
+  }
+
+  function fmtResult(str){
+    resultText.textContent = str;
+    resultEl.classList.remove('small','tiny');
+    if (str.length > 13) resultEl.classList.add('tiny');
+    else if (str.length > 9) resultEl.classList.add('small');
+  }
+
+  function inputNumber(n){
+    if (locked) return; // 강제 치환된 값을 관객이 눌러서 바꾸지 못하게 함
+    if (justEvaluated){
+      current = (n === '.') ? '0.' : n;
+      justEvaluated = false;
+      operator = null;
+      previous = null;
+      exprEl.textContent = '\u00A0';
+      clearOpSelection();
+      fmtResult(current);
+      return;
+    }
+    if (n === '.'){
+      if (current.includes('.')) return;
+      current += '.';
+    } else {
+      current = (current === '0') ? n : current + n;
+    }
+    fmtResult(current);
+  }
+
+  function clearOpSelection(){
+    document.querySelectorAll('.op').forEach(b => b.classList.remove('selected'));
+  }
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+
+  function magicDateTimeString(){
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = pad(now.getMonth() + 1);
+    const dd = pad(now.getDate());
+    const hh = pad(now.getHours());
+    const mi = pad(now.getMinutes());
+    return `${yyyy}${mm}${dd}${hh}${mi}`;
+  }
+
+  function realCompute(a, op, b){
+    switch(op){
+      case '+': return a + b;
+      case '×': return a * b;
+      case '÷': return b === 0 ? 0 : a / b;
+      default: return b;
+    }
+  }
+
+  // A(previous)를 기준으로 필요한 B값을 미리 계산해서 즉시 화면에 표시한다.
+  // '=' 을 누르기 전이라도 이미 화면에는 원하는 작은 수가 떠 있게 된다.
+  function showForcedNumber(){
+    const A = BigInt(previous);
+    const target = BigInt(magicDateTimeString());
+    let B = A - target;
+
+    if (B <= 0n){
+      // 앞 수(A)가 목표값보다 작거나 같으면 정상적으로 힘을 줄 수 없다.
+      B = target - A;
+    }
+
+    forcedTarget = target.toString();
+    forcedB = B.toString();
+
+    current = forcedB;
+    fmtResult(current);
+    locked = true;
+    armed = false;
+  }
+
+  // '=' 을 눌렀을 때, 이미 화면에 떠 있는 강제 B값으로 진짜 뺄셈을 확정한다.
+  function finalizeForcedSubtract(){
+    exprEl.textContent = `${previous} − ${forcedB} =`;
+    fmtResult(forcedTarget);
+
+    current = forcedTarget;
+    previous = forcedTarget;
+    operator = null;
+    justEvaluated = true;
+    locked = false;
+    forcedTarget = null;
+    forcedB = null;
+    clearOpSelection();
+  }
+
+  function pressOperator(op){
+    if (op === '='){
+      if (locked && operator === '-' && previous !== null){
+        vibrate(20);
+        finalizeForcedSubtract();
+        return;
+      }
+
+      if (operator === null || previous === null) return;
+      const a = parseFloat(previous);
+      const b = parseFloat(current);
+      let result = realCompute(a, operator, b);
+      if (!isFinite(result)) result = 0;
+      result = String(Math.round(result * 1e10) / 1e10);
+
+      exprEl.textContent = `${previous} ${operator === '-' ? '−' : operator} ${current} =`;
+      fmtResult(result);
+      current = result;
+      previous = result;
+      operator = null;
+      justEvaluated = true;
+      armed = false;
+      clearOpSelection();
+      return;
+    }
+
+    if (previous !== null && operator !== null && !justEvaluated){
+      const a = parseFloat(previous);
+      const b = parseFloat(current);
+      let chained = realCompute(a, operator, b);
+      if (!isFinite(chained)) chained = 0;
+      previous = String(chained);
+    } else {
+      previous = current;
+    }
+
+    operator = op;
+    current = '0';
+    justEvaluated = false;
+    locked = false;
+    // '-' 가 아닌 다른 연산자를 고르면 블라인드 강제 모드는 해제한다.
+    if (op !== '-'){
+      armed = false;
+    } else if (armed){
+      // 이미 몰래 켜둔 상태에서 '-' 를 누르면 바로 강제 숫자를 표시한다.
+      clearOpSelection();
+      const btn2 = document.querySelector(`.op[data-op="-"]`);
+      if (btn2) btn2.classList.add('selected');
+      showForcedNumber();
+      return;
+    }
+    clearOpSelection();
+    const btn = document.querySelector(`.op[data-op="${op}"]`);
+    if (btn) btn.classList.add('selected');
+    exprEl.textContent = `${previous} ${op === '-' ? '−' : op}`;
+  }
+
+  function handleFn(fn){
+    if (locked) return;
+    if (fn === 'sign'){
+      if (current === '0') return;
+      current = current.startsWith('-') ? current.slice(1) : '-' + current;
+      fmtResult(current);
+    } else if (fn === 'percent'){
+      current = String(parseFloat(current) / 100);
+      fmtResult(current);
+    } else if (fn === 'paren'){
+      // 디자인 요소 (동작 없음)
+    }
+  }
+
+  function backspace(){
+    if (justEvaluated || locked) return;
+    current = current.length > 1 ? current.slice(0, -1) : '0';
+    fmtResult(current);
+  }
+
+  function clearAll(){
+    current = '0';
+    previous = null;
+    operator = null;
+    justEvaluated = false;
+    armed = false;
+    locked = false;
+    forcedTarget = null;
+    forcedB = null;
+    clearOpSelection();
+    exprEl.textContent = '\u00A0';
+    fmtResult(current);
+  }
+
+  // 시계 아이콘: 몰래 한 번 탭해서 "강제 치환 모드"를 켠다.
+  // 이미 '-' 가 눌려 있는 상태라면 탭하는 즉시 화면에 필요한 B값이 뜬다.
+  // '-' 를 아직 안 눌렀다면, 다음에 '-' 를 누르는 순간 바로 표시된다.
+  armIcon.addEventListener('click', () => {
+    armed = true;
+    vibrate([15, 40, 15]);
+    if (operator === '-' && previous !== null && !locked){
+      showForcedNumber();
+    }
+  });
+
+  keys.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.num !== undefined){
+      inputNumber(btn.dataset.num);
+    } else if (btn.dataset.op !== undefined){
+      pressOperator(btn.dataset.op);
+    } else if (btn.dataset.fn !== undefined){
+      handleFn(btn.dataset.fn);
+    }
+  });
+
+  clearBtn.addEventListener('click', clearAll);
+  backspaceBtn.addEventListener('click', backspace);
+
+  fmtResult(current);
+})();
+</script>
+</body>
+</html>
